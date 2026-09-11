@@ -19,6 +19,7 @@ Pipeline:
 Author: Generated for the Smart Multi-Document Compliance & Contract Auditor project.
 """
 
+import html
 import io
 import logging
 import time
@@ -66,7 +67,7 @@ logger = logging.getLogger("contract_auditor")
 # Configuration constants
 # --------------------------------------------------------------------------
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"   # small, fast, free, runs on CPU
-GROQ_MODEL_NAME = "openai/gpt-oss-120b"  # good accuracy/speed tradeoff on Groq's free tier
+GROQ_MODEL_NAME = "openai/gpt-oss-120b"  # available on Groq's free/developer tier as of Sep 2026
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 TOP_K_RESULTS = 5
@@ -93,14 +94,26 @@ SYSTEM_VALIDATION_PROMPT = """You are a strict fact-checking auditor. You will b
 Your job is to verify the draft answer against the context ONLY. Respond in
 this exact format:
 
-VERDICT: SUPPORTED | PARTIALLY_SUPPORTED | NOT_SUPPORTED
+VERDICT: SUPPORTED | PARTIALLY_SUPPORTED | NOT_SUPPORTED | NOT_IN_DOCUMENT
 MISSING_OR_INCORRECT: <list any claims in the answer that are not backed by
 the context, or state "None" if the answer is fully grounded>
 NOTE: <one short sentence summarizing your finding for the end user>
 
-Be strict: if the answer references a clause, number, date, or obligation
-that does not literally appear in the context, mark it as NOT_SUPPORTED or
-PARTIALLY_SUPPORTED and explain why.
+Verdict definitions:
+- SUPPORTED: every factual claim in the answer is explicitly backed by the context.
+- PARTIALLY_SUPPORTED: some claims are backed, others are not.
+- NOT_SUPPORTED: the answer states a clause, number, date, or obligation that
+  does NOT appear in the context (a likely hallucination). This is the
+  category for genuinely fabricated content.
+- NOT_IN_DOCUMENT: the context simply does not address the topic asked about,
+  and the answer correctly says so instead of inventing an answer. This is a
+  GOOD outcome, not a hallucination -- use this verdict instead of
+  NOT_SUPPORTED whenever the answer honestly reports an absence of relevant
+  information rather than fabricating one.
+
+Be strict: only use NOT_SUPPORTED when the answer asserts something as fact
+that contradicts or is absent from the context. An honest "not found" answer
+should be NOT_IN_DOCUMENT, never NOT_SUPPORTED.
 """
 
 
@@ -383,11 +396,234 @@ def parse_verdict(validation_text: str) -> str:
 
 
 VERDICT_STYLE = {
-    "SUPPORTED": ("✅", "green"),
-    "PARTIALLY_SUPPORTED": ("⚠️", "orange"),
-    "NOT_SUPPORTED": ("❌", "red"),
-    "UNKNOWN": ("❔", "gray"),
+    # verdict -> (icon, hex background color, human label)
+    "SUPPORTED": ("✓", "#2F6F4E", "Supported"),
+    "PARTIALLY_SUPPORTED": ("~", "#B8863B", "Partially supported"),
+    "NOT_SUPPORTED": ("✕", "#A23B3B", "Not supported"),
+    "NOT_IN_DOCUMENT": ("–", "#3B5A7A", "Not in document"),
+    "UNKNOWN": ("?", "#6B7280", "Unknown"),
 }
+
+
+# --------------------------------------------------------------------------
+# Design system: a ledger / case-file aesthetic (ink, parchment, brass)
+# rather than a generic SaaS dashboard look. Injected once per page load.
+# --------------------------------------------------------------------------
+def inject_design_system():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+        :root {
+            --ink: #1C2333;
+            --ink-soft: #4A5266;
+            --parchment: #FAF8F3;
+            --parchment-dim: #F0ECE1;
+            --brass: #9C7A3C;
+            --brass-light: #C9A85C;
+            --line: #DDD6C7;
+        }
+
+        html, body, [class*="css"], .stMarkdown, p, span, div {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .stApp {
+            background: var(--parchment);
+        }
+
+        /* ---- Sidebar ---- */
+        section[data-testid="stSidebar"] {
+            background: var(--ink);
+            border-right: 1px solid var(--line);
+        }
+        section[data-testid="stSidebar"] * {
+            color: var(--parchment) !important;
+        }
+        section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
+            font-family: 'Source Serif 4', serif !important;
+            font-weight: 600 !important;
+        }
+        section[data-testid="stSidebar"] hr {
+            border-color: rgba(250,248,243,0.2);
+        }
+        section[data-testid="stSidebar"] .stButton>button {
+            background: var(--brass);
+            color: var(--ink) !important;
+            border: none;
+            border-radius: 3px;
+            font-weight: 600;
+            width: 100%;
+        }
+        section[data-testid="stSidebar"] .stButton>button:hover {
+            background: var(--brass-light);
+        }
+        section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+            background: rgba(250,248,243,0.06);
+            border: 1px dashed rgba(250,248,243,0.35);
+        }
+
+        /* ---- Main buttons ---- */
+        .stButton>button {
+            background: var(--ink);
+            color: var(--parchment) !important;
+            border-radius: 3px;
+            border: none;
+            font-weight: 600;
+            padding: 0.5rem 1.4rem;
+        }
+        .stButton>button:hover {
+            background: var(--ink-soft);
+        }
+        .stButton>button:disabled {
+            background: var(--line);
+            color: var(--ink-soft) !important;
+        }
+
+        /* ---- Inputs ---- */
+        .stTextArea textarea, .stTextInput input {
+            border: 1px solid var(--line) !important;
+            border-radius: 3px !important;
+            background: #fff !important;
+            font-family: 'Inter', sans-serif;
+        }
+        .stTextArea textarea:focus, .stTextInput input:focus {
+            border-color: var(--brass) !important;
+            box-shadow: none !important;
+        }
+
+        /* ---- Header ---- */
+        .auditor-header {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            padding-bottom: 16px;
+            margin-bottom: 4px;
+            border-bottom: 2px solid var(--ink);
+            flex-wrap: wrap;
+        }
+        .auditor-header .mark {
+            font-family: 'Source Serif 4', serif;
+            font-weight: 700;
+            font-size: 2.05rem;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }
+        .auditor-header .tagline {
+            font-size: 0.95rem;
+            color: var(--ink-soft);
+        }
+
+        /* ---- Docket / stats bar ---- */
+        .docket-bar {
+            display: flex;
+            gap: 32px;
+            padding: 16px 0 18px 0;
+            border-bottom: 1px solid var(--line);
+            margin-bottom: 22px;
+        }
+        .docket-stat .num {
+            font-family: 'Source Serif 4', serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--ink);
+            line-height: 1.1;
+        }
+        .docket-stat .label {
+            font-size: 0.78rem;
+            color: var(--ink-soft);
+        }
+
+        /* ---- Memo (answer) block ---- */
+        .memo-block {
+            background: #fff;
+            border-left: 4px solid var(--brass);
+            padding: 20px 24px 6px 24px;
+            margin-bottom: 4px;
+        }
+        .memo-question {
+            font-family: 'Source Serif 4', serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--ink);
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        /* ---- Verdict pill ---- */
+        .verdict-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 14px 0 4px 0;
+        }
+        .verdict-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.76rem;
+            font-weight: 500;
+            color: #fff;
+            letter-spacing: 0.02em;
+        }
+        .verdict-caption {
+            font-size: 0.82rem;
+            color: var(--ink-soft);
+        }
+
+        /* ---- Exhibit (source citation) ---- */
+        .exhibit {
+            border-left: 2px solid var(--line);
+            padding: 10px 16px;
+            margin: 10px 0;
+            background: var(--parchment-dim);
+        }
+        .exhibit-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.74rem;
+            color: var(--brass);
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .exhibit-text {
+            font-size: 0.92rem;
+            color: var(--ink);
+            line-height: 1.55;
+        }
+
+        /* ---- Section divider ---- */
+        .ledger-rule {
+            border: none;
+            border-top: 1px solid var(--line);
+            margin: 28px 0;
+        }
+
+        /* ---- Expander tidy-up ---- */
+        .streamlit-expanderHeader {
+            font-family: 'IBM Plex Mono', monospace !important;
+            font-size: 0.82rem !important;
+            color: var(--ink-soft) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_verdict_pill(verdict: str, note: str = "") -> str:
+    """Build the HTML for a verdict pill + optional trailing caption."""
+    icon, color, label = VERDICT_STYLE.get(verdict, VERDICT_STYLE["UNKNOWN"])
+    caption = f'<span class="verdict-caption">{html.escape(note)}</span>' if note else ""
+    return (
+        f'<div class="verdict-row">'
+        f'<span class="verdict-pill" style="background:{color};">{icon} VERDICT: {verdict}</span>'
+        f'{caption}'
+        f'</div>'
+    )
 
 
 # --------------------------------------------------------------------------
@@ -404,11 +640,18 @@ def init_session_state():
 
 def render_sidebar(embedder: SentenceTransformer):
     with st.sidebar:
-        st.header("📁 Upload Documents")
+        st.markdown(
+            '<div style="font-family:\'Source Serif 4\',serif; font-weight:600; '
+            'font-size:1.15rem; margin-bottom:2px;">Document Intake</div>'
+            '<div style="font-size:0.82rem; color:rgba(250,248,243,0.6); margin-bottom:16px;">'
+            '1. Upload &nbsp;→&nbsp; 2. Index &nbsp;→&nbsp; 3. Ask</div>',
+            unsafe_allow_html=True,
+        )
         uploaded_files = st.file_uploader(
-            "Upload one or more PDF contracts / policies",
+            "PDF contracts or policies",
             type=["pdf"],
             accept_multiple_files=True,
+            label_visibility="collapsed",
         )
 
         if uploaded_files and st.button("Process & Index Documents", type="primary"):
@@ -431,9 +674,18 @@ def render_sidebar(embedder: SentenceTransformer):
                     st.error("No text could be extracted from the uploaded file(s).")
 
         if st.session_state.indexed_filenames:
-            st.markdown("**Currently indexed:**")
+            st.markdown(
+                '<div style="font-size:0.82rem; color:rgba(250,248,243,0.6); '
+                'margin-top:18px; margin-bottom:4px;">On the record</div>',
+                unsafe_allow_html=True,
+            )
             for fname in st.session_state.indexed_filenames:
-                st.markdown(f"- {fname}")
+                st.markdown(
+                    f'<div style="font-family:\'IBM Plex Mono\',monospace; font-size:0.8rem; '
+                    f'padding:4px 0; border-bottom:1px solid rgba(250,248,243,0.12);">'
+                    f'{html.escape(fname)}</div>',
+                    unsafe_allow_html=True,
+                )
 
             if st.button("Clear index"):
                 st.session_state.vector_store = VectorStore()
@@ -441,37 +693,65 @@ def render_sidebar(embedder: SentenceTransformer):
                 st.session_state.history = []
                 st.rerun()
 
-        st.markdown("---")
-        st.caption(
-            "Retrieval: FAISS + Sentence-Transformers | "
-            "Generation & validation: Groq API"
+        st.markdown("<hr/>", unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:0.75rem; color:rgba(250,248,243,0.5); line-height:1.6;">'
+            'Retrieval — FAISS + Sentence-Transformers<br/>'
+            'Generation &amp; validation — Groq API</div>',
+            unsafe_allow_html=True,
         )
 
 
 def render_answer_block(entry: dict):
     """Render one Q&A turn: answer, validation badge, and cited sources."""
-    st.markdown(f"### ❓ {entry['question']}")
-    st.markdown(entry["answer"])
-
-    icon, color = VERDICT_STYLE.get(entry["verdict"], VERDICT_STYLE["UNKNOWN"])
     st.markdown(
-        f"**Validation:** :{color}[{icon} {entry['verdict'].replace('_', ' ').title()}]"
+        f'<div class="memo-block">'
+        f'<div class="memo-question">{html.escape(entry["question"])}</div>',
+        unsafe_allow_html=True,
     )
-    with st.expander("Show fact-check details"):
+    st.markdown(entry["answer"])
+    st.markdown(render_verdict_pill(entry["verdict"]), unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    with st.expander("Fact-check details"):
         st.text(entry["validation_raw"])
 
-    with st.expander(f"📎 Show {len(entry['sources'])} cited source chunk(s)"):
+    with st.expander(f"Cited sources ({len(entry['sources'])})"):
         for c in entry["sources"]:
-            st.markdown(f"**{c.source_file} — page {c.page_number}**")
-            st.info(c.text)
+            st.markdown(
+                f'<div class="exhibit">'
+                f'<div class="exhibit-label">{html.escape(c.source_file)} · page {c.page_number}</div>'
+                f'<div class="exhibit-text">{html.escape(c.text)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    st.markdown('<hr class="ledger-rule"/>', unsafe_allow_html=True)
 
 
 def render_main(client_available: bool, embedder: SentenceTransformer):
-    st.title("📑 Smart Multi-Document Compliance & Contract Auditor")
-    st.caption(
-        "Upload contracts or policy PDFs on the left, then ask questions. "
-        "Every answer is grounded in your documents and independently fact-checked."
+    st.markdown(
+        '<div class="auditor-header">'
+        '<span class="mark">Contract Auditor</span>'
+        '<span class="tagline">Grounded answers, cited to the page, fact-checked before you see them.</span>'
+        '</div>',
+        unsafe_allow_html=True,
     )
+
+    if not st.session_state.vector_store.is_empty():
+        num_docs = len(st.session_state.indexed_filenames)
+        num_chunks = len(st.session_state.vector_store.chunks)
+        num_questions = len(st.session_state.history)
+        st.markdown(
+            '<div class="docket-bar">'
+            f'<div class="docket-stat"><div class="num">{num_docs}</div>'
+            f'<div class="label">Document{"s" if num_docs != 1 else ""} indexed</div></div>'
+            f'<div class="docket-stat"><div class="num">{num_chunks}</div>'
+            f'<div class="label">Searchable chunks</div></div>'
+            f'<div class="docket-stat"><div class="num">{num_questions}</div>'
+            f'<div class="label">Question{"s" if num_questions != 1 else ""} asked</div></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     if not client_available:
         st.error(
@@ -481,7 +761,14 @@ def render_main(client_available: bool, embedder: SentenceTransformer):
         )
 
     if st.session_state.vector_store.is_empty():
-        st.info("👈 Upload and index at least one PDF to get started.")
+        st.markdown(
+            '<div style="border-left:4px solid var(--line); background:#fff; '
+            'padding:20px 24px; color:var(--ink-soft); font-size:0.95rem;">'
+            'No documents on file yet. Upload one or more PDFs in the sidebar '
+            'and click <strong>Process &amp; Index Documents</strong> to begin.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         return
 
     question = st.text_area(
@@ -527,18 +814,18 @@ def render_main(client_available: bool, embedder: SentenceTransformer):
         }
         st.session_state.history.insert(0, entry)
 
-    st.markdown("---")
+    st.markdown('<hr class="ledger-rule"/>', unsafe_allow_html=True)
     for entry in st.session_state.history:
         render_answer_block(entry)
-        st.markdown("---")
 
 
 def main():
     st.set_page_config(
-        page_title="Smart Contract Auditor",
-        page_icon="📑",
+        page_title="Contract Auditor",
+        page_icon="⚖️",
         layout="wide",
     )
+    inject_design_system()
     init_session_state()
 
     try:
