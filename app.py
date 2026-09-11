@@ -406,17 +406,19 @@ VERDICT_STYLE = {
 
 
 # --------------------------------------------------------------------------
-# Design system: "Slate & Teal" -- a clean, high-contrast light theme.
+# Design system: "Slate & Teal" -- dark theme.
 #
-# Deliberately conservative: we only apply custom colors/backgrounds to
-# elements we build ourselves (header, docket bar, memo blocks, verdict
-# pills, exhibits). We do NOT force text colors onto Streamlit's native
-# widget internals (file uploader, buttons' nested spans, tooltips, etc.),
-# because those often keep their own white backgrounds no matter what the
-# parent container's background is set to -- forcing white text there
-# produces invisible white-on-white text. Native widgets keep Streamlit's
-# own (already-accessible) default text colors; we only add borders/accent
-# colors to them.
+# The actual dark/light mode and all native widget coloring (buttons,
+# inputs, file uploader, alerts, expanders) is handled by
+# .streamlit/config.toml -- Streamlit's own theming engine, which is built
+# to guarantee correct contrast for its own components. We deliberately do
+# NOT hand-roll CSS overrides for native widgets here, because blindly
+# forcing a text color onto every descendant of a container risks landing
+# on an element that keeps its own background regardless of the parent
+# (e.g. an inner white chip), producing invisible text. Instead, we only
+# add colors/backgrounds to the custom HTML blocks we build ourselves below
+# (header, docket bar, memo blocks, verdict pills, exhibits), where we also
+# control the background and can guarantee the pairing is readable.
 # --------------------------------------------------------------------------
 def inject_design_system():
     st.markdown(
@@ -425,75 +427,17 @@ def inject_design_system():
         @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
         :root {
-            --ink: #1E2430;          /* primary text -- near-black, used on light backgrounds only */
-            --ink-soft: #5B6478;     /* secondary text -- still >4.5:1 contrast on white/page-bg */
-            --page-bg: #F5F6F8;      /* main page background */
-            --surface: #FFFFFF;      /* cards, memo blocks, sidebar */
-            --surface-dim: #EEF1F4;  /* exhibit / docket backgrounds */
-            --accent: #0F766E;       /* teal -- used as text color AND as pill backgrounds with white text */
-            --accent-dark: #0B5952;
-            --line: #DDE1E7;
+            --ink: #E7EAF0;          /* primary text -- light, for our own dark surfaces */
+            --ink-soft: #9AA3B2;     /* secondary text -- still >4.5:1 on dark surfaces */
+            --surface: #1B212C;      /* memo blocks, docket bar -- one step lighter than page bg */
+            --surface-dim: #242C3A;  /* exhibits -- another step lighter, for nesting inside memo */
+            --accent: #14B8A6;       /* teal -- borders, labels, links on dark surfaces */
+            --accent-dark: #0F766E;  /* deeper teal -- matches primaryColor in config.toml */
+            --line: #2E3646;         /* hairline borders on dark surfaces */
         }
 
-        html, body, [class*="css"], .stMarkdown, p, span, div {
+        html, body, [class*="css"] {
             font-family: 'Inter', sans-serif;
-            color: var(--ink);
-        }
-
-        .stApp {
-            background: var(--page-bg);
-        }
-
-        /* ---- Sidebar: light surface, same text color as main area,
-               so nothing depends on forcing color onto native widgets ---- */
-        section[data-testid="stSidebar"] {
-            background: var(--surface);
-            border-right: 1px solid var(--line);
-        }
-        section[data-testid="stSidebar"] h2,
-        section[data-testid="stSidebar"] h3,
-        section[data-testid="stSidebar"] label {
-            color: var(--ink) !important;
-        }
-        section[data-testid="stSidebar"] hr {
-            border-color: var(--line);
-        }
-        section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-            background: var(--surface-dim);
-            border: 1.5px dashed var(--line);
-        }
-
-        /* ---- Buttons: solid teal, white label -- verified readable pairing ---- */
-        .stButton>button {
-            background: var(--accent);
-            color: #FFFFFF !important;
-            border-radius: 4px;
-            border: none;
-            font-weight: 600;
-            padding: 0.5rem 1.4rem;
-        }
-        .stButton>button:hover {
-            background: var(--accent-dark);
-            color: #FFFFFF !important;
-        }
-        .stButton>button:disabled {
-            background: var(--line);
-            color: var(--ink-soft) !important;
-        }
-        .stButton>button p {
-            color: inherit !important;
-        }
-
-        /* ---- Inputs ---- */
-        .stTextArea textarea, .stTextInput input {
-            border: 1px solid var(--line) !important;
-            border-radius: 4px !important;
-            background: var(--surface) !important;
-            color: var(--ink) !important;
-        }
-        .stTextArea textarea:focus, .stTextInput input:focus {
-            border-color: var(--accent) !important;
-            box-shadow: none !important;
         }
 
         /* ---- Header ---- */
@@ -503,7 +447,7 @@ def inject_design_system():
             gap: 16px;
             padding-bottom: 16px;
             margin-bottom: 4px;
-            border-bottom: 2px solid var(--ink);
+            border-bottom: 2px solid var(--line);
             flex-wrap: wrap;
         }
         .auditor-header .mark {
@@ -523,8 +467,9 @@ def inject_design_system():
             display: flex;
             gap: 32px;
             padding: 16px 20px;
-            background: var(--surface-dim);
-            border-radius: 4px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 6px;
             margin-bottom: 22px;
         }
         .docket-stat .num {
@@ -544,7 +489,7 @@ def inject_design_system():
             background: var(--surface);
             border: 1px solid var(--line);
             border-left: 4px solid var(--accent);
-            border-radius: 0 4px 4px 0;
+            border-radius: 0 6px 6px 0;
             padding: 20px 24px 6px 24px;
             margin-bottom: 4px;
         }
@@ -588,7 +533,7 @@ def inject_design_system():
         .exhibit {
             border: 1px solid var(--line);
             border-left: 3px solid var(--accent);
-            border-radius: 0 4px 4px 0;
+            border-radius: 0 6px 6px 0;
             padding: 10px 16px;
             margin: 10px 0;
             background: var(--surface-dim);
@@ -596,7 +541,7 @@ def inject_design_system():
         .exhibit-label {
             font-family: 'IBM Plex Mono', monospace;
             font-size: 0.74rem;
-            color: var(--accent-dark);
+            color: var(--accent);
             margin-bottom: 5px;
             font-weight: 600;
         }
@@ -613,11 +558,11 @@ def inject_design_system():
             margin: 28px 0;
         }
 
-        /* ---- Expander tidy-up ---- */
+        /* ---- Expander: font only, no color override -- config.toml already
+               guarantees correct expander text contrast in dark mode ---- */
         .streamlit-expanderHeader {
             font-family: 'IBM Plex Mono', monospace !important;
             font-size: 0.82rem !important;
-            color: var(--ink-soft) !important;
         }
         </style>
         """,
@@ -773,7 +718,7 @@ def render_main(client_available: bool, embedder: SentenceTransformer):
 
     if st.session_state.vector_store.is_empty():
         st.markdown(
-            '<div style="border-left:4px solid var(--line); background:#fff; '
+            '<div style="border-left:4px solid var(--line); background:var(--surface); '
             'padding:20px 24px; color:var(--ink-soft); font-size:0.95rem;">'
             'No documents on file yet. Upload one or more PDFs in the sidebar '
             'and click <strong>Process &amp; Index Documents</strong> to begin.'
