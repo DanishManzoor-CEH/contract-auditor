@@ -66,7 +66,7 @@ logger = logging.getLogger("contract_auditor")
 # Configuration constants
 # --------------------------------------------------------------------------
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"   # small, fast, free, runs on CPU
-GROQ_MODEL_NAME = "llama-3.3-70b-versatile"  # good accuracy/speed tradeoff on Groq's free tier
+GROQ_MODEL_NAME = "openai/gpt-oss-120b"  # good accuracy/speed tradeoff on Groq's free tier
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 TOP_K_RESULTS = 5
