@@ -397,17 +397,26 @@ def parse_verdict(validation_text: str) -> str:
 
 VERDICT_STYLE = {
     # verdict -> (icon, hex background color, human label)
-    "SUPPORTED": ("✓", "#2F6F4E", "Supported"),
-    "PARTIALLY_SUPPORTED": ("~", "#B8863B", "Partially supported"),
-    "NOT_SUPPORTED": ("✕", "#A23B3B", "Not supported"),
-    "NOT_IN_DOCUMENT": ("–", "#3B5A7A", "Not in document"),
-    "UNKNOWN": ("?", "#6B7280", "Unknown"),
+    "SUPPORTED": ("✓", "#15803D", "Supported"),
+    "PARTIALLY_SUPPORTED": ("~", "#92400E", "Partially supported"),
+    "NOT_SUPPORTED": ("✕", "#B91C1C", "Not supported"),
+    "NOT_IN_DOCUMENT": ("–", "#1D4ED8", "Not in document"),
+    "UNKNOWN": ("?", "#4B5563", "Unknown"),
 }
 
 
 # --------------------------------------------------------------------------
-# Design system: a ledger / case-file aesthetic (ink, parchment, brass)
-# rather than a generic SaaS dashboard look. Injected once per page load.
+# Design system: "Slate & Teal" -- a clean, high-contrast light theme.
+#
+# Deliberately conservative: we only apply custom colors/backgrounds to
+# elements we build ourselves (header, docket bar, memo blocks, verdict
+# pills, exhibits). We do NOT force text colors onto Streamlit's native
+# widget internals (file uploader, buttons' nested spans, tooltips, etc.),
+# because those often keep their own white backgrounds no matter what the
+# parent container's background is set to -- forcing white text there
+# produces invisible white-on-white text. Native widgets keep Streamlit's
+# own (already-accessible) default text colors; we only add borders/accent
+# colors to them.
 # --------------------------------------------------------------------------
 def inject_design_system():
     st.markdown(
@@ -416,80 +425,74 @@ def inject_design_system():
         @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
         :root {
-            --ink: #1C2333;
-            --ink-soft: #4A5266;
-            --parchment: #FAF8F3;
-            --parchment-dim: #F0ECE1;
-            --brass: #9C7A3C;
-            --brass-light: #C9A85C;
-            --line: #DDD6C7;
+            --ink: #1E2430;          /* primary text -- near-black, used on light backgrounds only */
+            --ink-soft: #5B6478;     /* secondary text -- still >4.5:1 contrast on white/page-bg */
+            --page-bg: #F5F6F8;      /* main page background */
+            --surface: #FFFFFF;      /* cards, memo blocks, sidebar */
+            --surface-dim: #EEF1F4;  /* exhibit / docket backgrounds */
+            --accent: #0F766E;       /* teal -- used as text color AND as pill backgrounds with white text */
+            --accent-dark: #0B5952;
+            --line: #DDE1E7;
         }
 
         html, body, [class*="css"], .stMarkdown, p, span, div {
             font-family: 'Inter', sans-serif;
+            color: var(--ink);
         }
 
         .stApp {
-            background: var(--parchment);
+            background: var(--page-bg);
         }
 
-        /* ---- Sidebar ---- */
+        /* ---- Sidebar: light surface, same text color as main area,
+               so nothing depends on forcing color onto native widgets ---- */
         section[data-testid="stSidebar"] {
-            background: var(--ink);
+            background: var(--surface);
             border-right: 1px solid var(--line);
         }
-        section[data-testid="stSidebar"] * {
-            color: var(--parchment) !important;
-        }
-        section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
-            font-family: 'Source Serif 4', serif !important;
-            font-weight: 600 !important;
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3,
+        section[data-testid="stSidebar"] label {
+            color: var(--ink) !important;
         }
         section[data-testid="stSidebar"] hr {
-            border-color: rgba(250,248,243,0.2);
-        }
-        section[data-testid="stSidebar"] .stButton>button {
-            background: var(--brass);
-            color: var(--ink) !important;
-            border: none;
-            border-radius: 3px;
-            font-weight: 600;
-            width: 100%;
-        }
-        section[data-testid="stSidebar"] .stButton>button:hover {
-            background: var(--brass-light);
+            border-color: var(--line);
         }
         section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-            background: rgba(250,248,243,0.06);
-            border: 1px dashed rgba(250,248,243,0.35);
+            background: var(--surface-dim);
+            border: 1.5px dashed var(--line);
         }
 
-        /* ---- Main buttons ---- */
+        /* ---- Buttons: solid teal, white label -- verified readable pairing ---- */
         .stButton>button {
-            background: var(--ink);
-            color: var(--parchment) !important;
-            border-radius: 3px;
+            background: var(--accent);
+            color: #FFFFFF !important;
+            border-radius: 4px;
             border: none;
             font-weight: 600;
             padding: 0.5rem 1.4rem;
         }
         .stButton>button:hover {
-            background: var(--ink-soft);
+            background: var(--accent-dark);
+            color: #FFFFFF !important;
         }
         .stButton>button:disabled {
             background: var(--line);
             color: var(--ink-soft) !important;
         }
+        .stButton>button p {
+            color: inherit !important;
+        }
 
         /* ---- Inputs ---- */
         .stTextArea textarea, .stTextInput input {
             border: 1px solid var(--line) !important;
-            border-radius: 3px !important;
-            background: #fff !important;
-            font-family: 'Inter', sans-serif;
+            border-radius: 4px !important;
+            background: var(--surface) !important;
+            color: var(--ink) !important;
         }
         .stTextArea textarea:focus, .stTextInput input:focus {
-            border-color: var(--brass) !important;
+            border-color: var(--accent) !important;
             box-shadow: none !important;
         }
 
@@ -519,8 +522,9 @@ def inject_design_system():
         .docket-bar {
             display: flex;
             gap: 32px;
-            padding: 16px 0 18px 0;
-            border-bottom: 1px solid var(--line);
+            padding: 16px 20px;
+            background: var(--surface-dim);
+            border-radius: 4px;
             margin-bottom: 22px;
         }
         .docket-stat .num {
@@ -537,10 +541,15 @@ def inject_design_system():
 
         /* ---- Memo (answer) block ---- */
         .memo-block {
-            background: #fff;
-            border-left: 4px solid var(--brass);
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 4px 4px 0;
             padding: 20px 24px 6px 24px;
             margin-bottom: 4px;
+        }
+        .memo-block p, .memo-block li, .memo-block strong {
+            color: var(--ink) !important;
         }
         .memo-question {
             font-family: 'Source Serif 4', serif;
@@ -551,7 +560,7 @@ def inject_design_system():
             line-height: 1.4;
         }
 
-        /* ---- Verdict pill ---- */
+        /* ---- Verdict pill: white text on a solid, tested-dark color ---- */
         .verdict-row {
             display: flex;
             align-items: center;
@@ -563,11 +572,11 @@ def inject_design_system():
             align-items: center;
             gap: 7px;
             padding: 4px 12px;
-            border-radius: 3px;
+            border-radius: 4px;
             font-family: 'IBM Plex Mono', monospace;
             font-size: 0.76rem;
             font-weight: 500;
-            color: #fff;
+            color: #FFFFFF;
             letter-spacing: 0.02em;
         }
         .verdict-caption {
@@ -577,17 +586,19 @@ def inject_design_system():
 
         /* ---- Exhibit (source citation) ---- */
         .exhibit {
-            border-left: 2px solid var(--line);
+            border: 1px solid var(--line);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 4px 4px 0;
             padding: 10px 16px;
             margin: 10px 0;
-            background: var(--parchment-dim);
+            background: var(--surface-dim);
         }
         .exhibit-label {
             font-family: 'IBM Plex Mono', monospace;
             font-size: 0.74rem;
-            color: var(--brass);
+            color: var(--accent-dark);
             margin-bottom: 5px;
-            font-weight: 500;
+            font-weight: 600;
         }
         .exhibit-text {
             font-size: 0.92rem;
@@ -642,8 +653,8 @@ def render_sidebar(embedder: SentenceTransformer):
     with st.sidebar:
         st.markdown(
             '<div style="font-family:\'Source Serif 4\',serif; font-weight:600; '
-            'font-size:1.15rem; margin-bottom:2px;">Document Intake</div>'
-            '<div style="font-size:0.82rem; color:rgba(250,248,243,0.6); margin-bottom:16px;">'
+            'font-size:1.15rem; color:var(--ink); margin-bottom:2px;">Document Intake</div>'
+            '<div style="font-size:0.82rem; color:var(--ink-soft); margin-bottom:16px;">'
             '1. Upload &nbsp;→&nbsp; 2. Index &nbsp;→&nbsp; 3. Ask</div>',
             unsafe_allow_html=True,
         )
@@ -675,14 +686,14 @@ def render_sidebar(embedder: SentenceTransformer):
 
         if st.session_state.indexed_filenames:
             st.markdown(
-                '<div style="font-size:0.82rem; color:rgba(250,248,243,0.6); '
+                '<div style="font-size:0.82rem; color:var(--ink-soft); '
                 'margin-top:18px; margin-bottom:4px;">On the record</div>',
                 unsafe_allow_html=True,
             )
             for fname in st.session_state.indexed_filenames:
                 st.markdown(
                     f'<div style="font-family:\'IBM Plex Mono\',monospace; font-size:0.8rem; '
-                    f'padding:4px 0; border-bottom:1px solid rgba(250,248,243,0.12);">'
+                    f'color:var(--ink); padding:4px 0; border-bottom:1px solid var(--line);">'
                     f'{html.escape(fname)}</div>',
                     unsafe_allow_html=True,
                 )
@@ -695,7 +706,7 @@ def render_sidebar(embedder: SentenceTransformer):
 
         st.markdown("<hr/>", unsafe_allow_html=True)
         st.markdown(
-            '<div style="font-size:0.75rem; color:rgba(250,248,243,0.5); line-height:1.6;">'
+            '<div style="font-size:0.75rem; color:var(--ink-soft); line-height:1.6;">'
             'Retrieval — FAISS + Sentence-Transformers<br/>'
             'Generation &amp; validation — Groq API</div>',
             unsafe_allow_html=True,
