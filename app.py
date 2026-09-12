@@ -777,7 +777,7 @@ def render_main(client_available: bool, embedder: SentenceTransformer):
 
 def main():
     st.set_page_config(
-        page_title="Contract Auditor",
+        page_title="Smart Multi-Document Compliance & Contract Auditor",
         page_icon="⚖️",
         layout="wide",
     )
